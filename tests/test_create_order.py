@@ -1,13 +1,12 @@
-import requests
 import allure
 import pytest
-from config import Urls, ResponseMessages as RM
+from config import ResponseMessages as RM
 
 @allure.epic('Создание заказа')
 class TestCreateOrder:
     @allure.title('Создание заказа с ингредиентами авторизованным/неавторизованным пользователем')
     @pytest.mark.parametrize('headers_type', ['auth', 'unauth'])
-    def test_create_order_with_ingredient_success(self, headers_type, user_login, get_ingredients):
+    def test_create_order_with_ingredient_success(self, headers_type, api, user_login, get_ingredients):
         payload = {
             'ingredients' : get_ingredients
         }
@@ -18,8 +17,7 @@ class TestCreateOrder:
         }
         headers = headers_map[headers_type]
 
-        with allure.step('Отправляем запрос на создание заказа'):
-            response = requests.post(Urls.ORDERS, json=payload, headers = headers)
+        response = api.create_order(payload, headers)
 
         assert response.status_code == 200
         assert response.json()['success'] == True
@@ -28,27 +26,27 @@ class TestCreateOrder:
 
 
     @allure.title('Попытка создать заказ с некорректным хешем ингредиента авторизованным пользователем')
-    def test_create_order_incorrect_id_ingredient_error(self, user_login):
+    def test_create_order_incorrect_id_ingredient_error(self, api, user_login):
         headers = {
             'Authorization' : user_login['accessToken']
         }
+        payload = {'ingredients':['1']}
 
-        with allure.step('Отправляем запрос на создание заказа с неверным хешом ингредиента'):
-            response = requests.post(Urls.ORDERS, json = {'ingredients' : ['1']}, headers=headers)
+        response = api.create_order(payload, headers)
 
         assert response.status_code == 500
 
 
 
     @allure.title('Попытка создать заказ БЕЗ ингредиента авторизованным пользователем')
-    def test_create_order_without_ingredient_error(self, user_login):
+    def test_create_order_without_ingredient_error(self, api, user_login):
         headers = {
             'Authorization' : user_login['accessToken']
         }
 
-        with allure.step('Отправляем запрос на создание заказа БЕЗ ингредиентов'):
-            response = requests.post(Urls.ORDERS, headers=headers)
+        response = api.create_order(headers=headers) 
 
         assert response.status_code == 400
         assert response.json()['success'] == False
         assert response.json()['message'] == RM.MISSING_INGREDIENT
+        

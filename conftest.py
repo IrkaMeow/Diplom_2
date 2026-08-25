@@ -1,30 +1,38 @@
 import pytest
-import requests
-import allure
 import generators
-from config import Urls
+from api_client import BurgerApiClient
 
-# генерирует случайные данные пользователя
+# создает объект класса BurgerApiClient
 @pytest.fixture
-def user_data_generation():
-    return {
+def api():
+    return BurgerApiClient()
+
+# генерирует случайные данные пользователя и удаляет его
+@pytest.fixture
+def user_data_generation(api):
+    payload = {
         'email': generators.email_generator(),
         'password': generators.password_generator(),
         'name': generators.name_generator()
     }
 
-# регистрирует и удаляет пользователя
-@pytest.fixture
-def create_new_user(user_data_generation):
-    payload = user_data_generation
+    yield payload
 
-    with allure.step('Отправляем запрос на регистрацию пользователя'):
-        response = requests.post(Urls.REGISTR_USER, json=payload)
+    del payload['name']
+    response = api.authorize_user(payload)
+    token = response.json().get('accessToken')
+    if token:
+        api.remove_user(token)
+
+
+# регистрирует пользователя
+@pytest.fixture
+def create_new_user(api, user_data_generation):
+    payload = user_data_generation
+    response = api.create_user(payload)
 
     if response.status_code != 200:
-        raise RuntimeError(f'Регистрация не удалась. Код: {response.status_code}, ответ: {response.text}')
-
-    accessToken = response.json()['accessToken']
+        pytest.fail(f'Регистрация пользователя не удалась. Код: {response.status_code}, ответ: {response.text}')
 
     yield {
         'email': payload['email'],
@@ -32,13 +40,10 @@ def create_new_user(user_data_generation):
         'name' : payload['name']
     }
 
-    with allure.step('Отправляем запрос на удаление пользователя'):
-        requests.delete(Urls.DATA_USER, headers={'Authorization': accessToken})
-
 
 # авторизация пользователя
 @pytest.fixture
-def user_login(create_new_user):
+def user_login(api, create_new_user):
     user_data = create_new_user
 
     payload = {
@@ -46,22 +51,21 @@ def user_login(create_new_user):
         'password': user_data['password'],
     }
 
-    with allure.step('Отправляем запрос на авторизацию пользователя'):
-        response = requests.post(Urls.LOGIN_USER, json=payload)
-        accessToken = response.json()['accessToken']
+    response = api.authorize_user(payload)
+    accessToken = response.json()['accessToken']
     yield {
         'email': payload['email'],
         'password': payload['password'],
         'accessToken' : accessToken
     }
 
+
 # собирает 5 первых хешей ингредиентов
-@pytest.fixture(scope='module')
-def get_ingredients():
-    with allure.step('Отправляем запрос на доступные ингредиенты'):
-        response = requests.get(Urls.INGREDIENTS)
+@pytest.fixture
+def get_ingredients(api):
+    response = api.access_ingredients()
 
     if response.status_code != 200:
-        raise RuntimeError(f'Не удалось получить ингредиенты. Код ошибки: {response.status_code}')
+        pytest.fail(f'Не удалось получить ингредиенты в фикстуре. Код ошибки: {response.status_code}')
 
     return [ingredient['_id'] for ingredient in response.json()['data']][:5]

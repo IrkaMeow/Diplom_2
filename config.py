@@ -16,3 +16,4 @@ class ResponseMessages:
     CREATE_MISSING_FIELD = 'Email, password and name are required fields'
     LOGIN_INCORRECT_FIELD = 'email or password are incorrect'
     ORDER_WITHOUT_LOGIN = 'You should be authorised'
+    
